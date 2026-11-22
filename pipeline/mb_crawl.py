@@ -61,8 +61,23 @@ def crawl_list():
     print("total reported", total, "collected", len(projects))
 
 
+def in_scope(p, flt):
+    """A city's optional crawl_filter: keep a project if its pincode or locality is listed. No filter keeps all."""
+    if not flt:
+        return True
+    if str(p.get("pincode") or "").strip() in flt.get("pincodes", []):
+        return True
+    loc = (p.get("locality") or "").lower()
+    return any(w in loc for w in flt.get("localities", []))
+
+
 def crawl_projects():
     index = json.loads((OUT / "mb_index.json").read_text())
+    flt = CFG.get("crawl_filter")
+    if flt:
+        before = len(index)
+        index = [p for p in index if in_scope(p, flt)]
+        print(f"crawl_filter: {len(index)} of {before} projects are in the search area", flush=True)
     from concurrent.futures import ThreadPoolExecutor
 
     def one(p):

@@ -61,3 +61,15 @@ def test_photo_links_skip_floor_plans():
     links = mb_parse.photo_links("2025/09/18/Project-Photo-9-X-5021659_410_1440.jpg,2025/07/01/Floor-Plan-36-X_505_661.jpg")
     assert links == [{"thumb": "https://img.staticmb.com/mbimages/project/Photo_h310_w462/2025/09/18/Project-Photo-9-X-5021659_410_1440_310_462.jpg",
                       "full": "https://img.staticmb.com/mbimages/project/2025/09/18/Project-Photo-9-X-5021659_410_1440.jpg"}]
+
+
+def test_crawl_filter_by_pincode_or_locality():
+    import sys
+    sys.argv = ["mb_crawl.py", "list", "hyderabad"]
+    import importlib, mb_crawl
+    importlib.reload(mb_crawl)
+    flt = {"pincodes": ["500081"], "localities": ["kondapur"]}
+    assert mb_crawl.in_scope({"pincode": "500081", "locality": "Uppal"}, flt)
+    assert mb_crawl.in_scope({"pincode": None, "locality": "Kondapur, Hyderabad"}, flt)
+    assert not mb_crawl.in_scope({"pincode": "500039", "locality": "Uppal"}, flt)
+    assert mb_crawl.in_scope({"pincode": "500039", "locality": "Uppal"}, None)
