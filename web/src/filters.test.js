@@ -138,3 +138,18 @@ describe('flagged prices', () => {
     expect(priceFor(s, 'rent', [3])).toMatchObject({ value: 90100, estimated: true });
   });
 });
+
+describe('drive time to anchors', () => {
+  const soc = (min) => ({ id: 'x', name: 'X', kind: 'apartment', amenities: [], unit_types: [], prices: {}, drive: { school: { min } } });
+  const c = (lim) => ({ ...structuredClone(DEFAULT_CRITERIA), maxDrive: { school: lim } });
+  it('passes within the limit and fails beyond it', () => {
+    expect(matchSociety(soc(12), c(20))).toBe('match');
+    expect(matchSociety(soc(25), c(20))).toBe('no');
+  });
+  it('is never a match without a route', () => {
+    expect(matchSociety(soc(null), c(20))).toBe('unknown');
+  });
+  it('ignores an empty limit', () => {
+    expect(matchSociety(soc(90), c(null))).toBe('match');
+  });
+});

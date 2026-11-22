@@ -159,7 +159,7 @@ def events_for(s):
     ev = []
     sid = s["id"]
     src = s.get("url")
-    ev.append({"sid": sid, "step": "Located on map", "finding": f"{s['locality'] or 'Gurgaon'} · {s['lat']:.4f}, {s['lng']:.4f}", "url": src})
+    ev.append({"sid": sid, "step": "Located on map", "finding": f"{s['locality'] or ''} · {s['lat']:.4f}, {s['lng']:.4f}", "url": src})
     bits = [f"{int(s['towers'])} towers" if s.get("towers") else None, f"{int(s['units']):,} units" if s.get("units") else None,
             f"{s['acres']} acres" if s.get("acres") else None]
     if any(bits):
@@ -226,7 +226,9 @@ def main(city="gurgaon"):
     cfg = json.loads((ROOT.parent / "data" / "cities.json").read_text())[city]
     out = OUT / city
     raw = json.loads((out / "mb_projects.json").read_text())
-    located = [p for p in raw if p.get("lat") and p.get("lng") and 28.2 < p["lat"] < 28.7 and 76.7 < p["lng"] < 77.3]
+    s_, w_, n_, e_ = cfg["bbox"]
+    pad = 0.15  # degrees: keep the edges, drop portal pins that land in another city
+    located = [p for p in raw if p.get("lat") and p.get("lng") and s_ - pad < p["lat"] < n_ + pad and w_ - pad < p["lng"] < e_ + pad]
     not_located = len(raw) - len(located)
     projects = dedupe(located)
     areas = json.loads((out / "osm_areas.geojson").read_text())["features"]
@@ -259,6 +261,17 @@ def main(city="gurgaon"):
             s["towers"] = None
         p["_s"] = s
         societies.append(s)
+
+    # distance and drive time to the city's anchors (school, office...), from drive_times.py
+    anchors = json.loads((out / "anchors.json").read_text()) if (out / "anchors.json").exists() else []
+    drive = json.loads((out / "drive_times.json").read_text()) if (out / "drive_times.json").exists() else {}
+    for p in projects:
+        s, d = p["_s"], drive.get(str(p["mb_id"]), {})
+        s["drive"] = {a["key"]: {"min": (d.get(a["key"]) or {}).get("min"), "km": (d.get(a["key"]) or {}).get("km"),
+                                 "air_km": round(geo.dist_m((s["lng"], s["lat"]), (a["lng"], a["lat"])) / 1000, 1)}
+                      for a in anchors}
+    if anchors:
+        print("drive times found for", sum(1 for p in projects if str(p["mb_id"]) in drive), "of", len(projects), "societies")
 
     taken = set()
     for v in ver:
@@ -442,7 +455,10 @@ def main(city="gurgaon"):
                        "ai_read": sum(1 for s in societies if s.get("ai_read")),
                        "for_sale": sum(s["sale_count"] or 0 for s in societies), "for_rent": sum(s["rent_count"] or 0 for s in societies),
                        "verified": sum(s["verified"] for s in societies)},
-            "sources": ["Magicbricks project pages", "OpenStreetMap contributors", "HRERA Gurugram", "Builder brochures (verified rows)"],
+            "sources": ["Magicbricks project pages", "OpenStreetMap contributors"] + (["HRERA Gurugram", "Builder brochures (verified rows)"] if city == "gurgaon" else [])
+                       + (["OSRM road routing (no traffic)"] if anchors else []),
+            "anchors": [{k: a[k] for k in ("key", "label", "address", "lat", "lng")} for a in anchors],
+            "baseline": cfg.get("baseline"),
             "societies": societies, "events": events}
     details = {}
     for s in societies:  # heavy per-society text, loaded only when a card opens

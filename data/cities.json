@@ -1,5 +1,11 @@
 {
   "gurgaon": { "name": "Gurugram", "magicbricks": "gurgaon", "bbox": [28.33, 76.88, 28.55, 77.16], "center": [77.065, 28.425], "zoom": 12.4 },
   "bangalore": { "name": "Bengaluru", "magicbricks": "bangalore", "bbox": [12.80, 77.40, 13.20, 77.80], "center": [77.60, 12.97], "zoom": 11.4 },
-  "mumbai": { "name": "Mumbai", "magicbricks": "mumbai", "bbox": [18.89, 72.77, 19.30, 73.05], "center": [72.88, 19.08], "zoom": 11.4 }
+  "mumbai": { "name": "Mumbai", "magicbricks": "mumbai", "bbox": [18.89, 72.77, 19.30, 73.05], "center": [72.88, 19.08], "zoom": 11.4 },
+  "hyderabad": { "name": "Hyderabad", "magicbricks": "hyderabad", "bbox": [17.34, 78.28, 17.52, 78.46], "center": [78.375, 17.435], "zoom": 12.6,
+    "anchors": [
+      { "key": "school", "label": "Anthea Montessori", "address": "Plot 2, Shilpi Valley, Gafoor Nagar, Madhapur, Hyderabad 500081", "query": "Shilpi Valley, Madhapur, Hyderabad" },
+      { "key": "office", "label": "Sattva Knowledge City", "address": "Silpa Gram Craft Village, HITEC City, Hyderabad 500032", "query": "Sattva Knowledge City, Hyderabad" }
+    ],
+    "baseline": { "name": "My Home Vihanga", "rent": 64000, "maintenance": 8000 } }
 }
