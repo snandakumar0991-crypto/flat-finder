@@ -17,7 +17,7 @@ import mb_parse
 ROOT = pathlib.Path(__file__).parent
 CACHE = ROOT / "cache" / "mb"
 OUT = ROOT / "out"
-CITIES = json.loads((ROOT.parent / "data" / "cities.json").read_text())
+CITIES = json.loads((ROOT.parent / "data" / "cities.json").read_text(encoding="utf-8"))
 CITY = next((a for a in sys.argv[1:] if a in CITIES), "gurgaon")
 CFG = CITIES[CITY]
 LIST_URL = "https://www.magicbricks.com/residential-projects-in-" + CFG["magicbricks"] + "-nprid/page-{}"
@@ -72,7 +72,7 @@ def in_scope(p, flt):
 
 
 def crawl_projects():
-    index = json.loads((OUT / "mb_index.json").read_text())
+    index = json.loads((OUT / "mb_index.json").read_text(encoding="utf-8"))
     flt = CFG.get("crawl_filter")
     if flt:
         before = len(index)

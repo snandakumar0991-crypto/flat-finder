@@ -38,7 +38,7 @@ def get(url, cache_name=None):
     time.sleep(1)
     if cache_name:
         CACHE.mkdir(parents=True, exist_ok=True)
-        (CACHE / cache_name).write_text(html)
+        (CACHE / cache_name).write_text(html, encoding="utf-8")
     return html
 
 
@@ -107,9 +107,9 @@ def run(job):
 
 
 def main(city="gurgaon", limit=None):
-    data = json.loads((ROOT.parent / "web" / "public" / "data" / f"{city}.json").read_text())
+    data = json.loads((ROOT.parent / "web" / "public" / "data" / f"{city}.json").read_text(encoding="utf-8"))
     out_file = ROOT.parent / "data" / "verified" / f"{city}-hrera.json"
-    done = json.loads(out_file.read_text())["societies"] if out_file.exists() else {}
+    done = json.loads(out_file.read_text(encoding="utf-8"))["societies"] if out_file.exists() else {}
     projects = registered_projects()
     print("HRERA Gurugram projects", len(projects), flush=True)
 

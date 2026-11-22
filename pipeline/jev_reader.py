@@ -78,7 +78,7 @@ def bounds(ans, prefix, steps):
 
 
 def key():
-    for line in (pathlib.Path.home() / ".claude" / ".env").read_text().splitlines():
+    for line in (pathlib.Path.home() / ".claude" / ".env").read_text(encoding="utf-8").splitlines():
         if line.startswith("JEV_KEY="):
             return line.split("=", 1)[1].strip().strip('"')
     raise SystemExit("JEV_KEY not found in ~/.claude/.env")
@@ -142,13 +142,13 @@ def read_plan(url, bhk_hint, api_key):
 
 
 def main(city="gurgaon", limit=None):
-    data = json.loads((ROOT.parent / "web" / "public" / "data" / f"{city}.json").read_text())
+    data = json.loads((ROOT.parent / "web" / "public" / "data" / f"{city}.json").read_text(encoding="utf-8"))
     pool = [s for s in data["societies"] if s["kind"] in ("apartment", "builder floor") and s.get("plan_links")]
     pool.sort(key=lambda s: -((s.get("sale_count") or 0) + (s.get("rent_count") or 0)))
     if limit:
         pool = pool[:limit]
     out_file = ROOT.parent / "data" / "verified" / f"{city}-ai.json"
-    done = json.loads(out_file.read_text())["plans"] if out_file.exists() else {}
+    done = json.loads(out_file.read_text(encoding="utf-8"))["plans"] if out_file.exists() else {}
     api_key = key()
     jobs = [(s["id"], b, u) for s in pool for b, urls in s["plan_links"].items() for u in urls[:3] if u not in done]
     print("plans to read", len(jobs), flush=True)

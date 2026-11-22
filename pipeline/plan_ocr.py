@@ -130,8 +130,8 @@ def judge(r, jev):
 
 
 def main(city="gurgaon"):
-    data = json.loads((ROOT.parent / "web" / "public" / "data" / f"{city}.json").read_text())
-    jev = json.loads((ROOT.parent / "data" / "verified" / f"{city}-ai.json").read_text())["plans"]
+    data = json.loads((ROOT.parent / "web" / "public" / "data" / f"{city}.json").read_text(encoding="utf-8"))
+    jev = json.loads((ROOT.parent / "data" / "verified" / f"{city}-ai.json").read_text(encoding="utf-8"))["plans"]
     jobs, sid_of = [], {}
     for s in data["societies"]:
         for b, urls in (s.get("plan_links") or {}).items():

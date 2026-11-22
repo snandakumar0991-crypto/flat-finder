@@ -49,7 +49,7 @@ def main(city="gurgaon"):
     if not src.exists():
         print("nothing found yet")
         return
-    found = json.loads(src.read_text())["societies"]
+    found = json.loads(src.read_text(encoding="utf-8"))["societies"]
     # dcjain.com prints sizes including the walls, which overstates rooms: leave it out
     jobs = [(sid, p) for sid, v in found.items() for p in v.get("plans", []) if "dcjain" not in (p["url"] + (p.get("found_on") or "")).lower()]
     out = {}
