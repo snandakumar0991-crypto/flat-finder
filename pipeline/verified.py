@@ -45,7 +45,7 @@ def unit_from_verified(u):
 
 
 def load_verified(path=FILE):
-    data = json.loads(pathlib.Path(path).read_text())
+    data = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
     out = []
     for s in data["societies"]:
         out.append({

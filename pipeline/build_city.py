@@ -223,17 +223,17 @@ def shapes_for(s, area, bld_grid, sid_seed):
 
 
 def main(city="gurgaon"):
-    cfg = json.loads((ROOT.parent / "data" / "cities.json").read_text())[city]
+    cfg = json.loads((ROOT.parent / "data" / "cities.json").read_text(encoding="utf-8"))[city]
     out = OUT / city
-    raw = json.loads((out / "mb_projects.json").read_text())
+    raw = json.loads((out / "mb_projects.json").read_text(encoding="utf-8"))
     s_, w_, n_, e_ = cfg["bbox"]
     pad = 0.15  # degrees: keep the edges, drop portal pins that land in another city
     located = [p for p in raw if p.get("lat") and p.get("lng") and s_ - pad < p["lat"] < n_ + pad and w_ - pad < p["lng"] < e_ + pad]
     not_located = len(raw) - len(located)
     projects = dedupe(located)
-    areas = json.loads((out / "osm_areas.geojson").read_text())["features"]
+    areas = json.loads((out / "osm_areas.geojson").read_text(encoding="utf-8"))["features"]
     area_grid = Grid(areas, lambda a: geo.centroid(a["geometry"]["coordinates"][0]))
-    blds = json.loads((out / "osm_buildings.geojson").read_text())["features"]
+    blds = json.loads((out / "osm_buildings.geojson").read_text(encoding="utf-8"))["features"]
     for b in blds:
         b["_c"] = geo.centroid(b["geometry"]["coordinates"][0])
     bld_grid = Grid(blds, lambda b: b["_c"])
@@ -263,8 +263,8 @@ def main(city="gurgaon"):
         societies.append(s)
 
     # distance and drive time to the city's anchors (school, office...), from drive_times.py
-    anchors = json.loads((out / "anchors.json").read_text()) if (out / "anchors.json").exists() else []
-    drive = json.loads((out / "drive_times.json").read_text()) if (out / "drive_times.json").exists() else {}
+    anchors = json.loads((out / "anchors.json").read_text(encoding="utf-8")) if (out / "anchors.json").exists() else []
+    drive = json.loads((out / "drive_times.json").read_text(encoding="utf-8")) if (out / "drive_times.json").exists() else {}
     for p in projects:
         s, d = p["_s"], drive.get(str(p["mb_id"]), {})
         s["drive"] = {a["key"]: {"min": (d.get(a["key"]) or {}).get("min"), "km": (d.get(a["key"]) or {}).get("km"),
@@ -289,8 +289,8 @@ def main(city="gurgaon"):
 
     # bedroom sizes read from floor plan images: local OCR first (every printed size), Jev as a fallback and cross-check
     vdir = verified.ROOT / "data" / "verified"
-    ai_plans = json.loads((vdir / f"{city}-ai.json").read_text())["plans"] if (vdir / f"{city}-ai.json").exists() else {}
-    ocr_plans = json.loads((vdir / f"{city}-ocr.json").read_text())["plans"] if (vdir / f"{city}-ocr.json").exists() else {}
+    ai_plans = json.loads((vdir / f"{city}-ai.json").read_text(encoding="utf-8"))["plans"] if (vdir / f"{city}-ai.json").exists() else {}
+    ocr_plans = json.loads((vdir / f"{city}-ocr.json").read_text(encoding="utf-8"))["plans"] if (vdir / f"{city}-ocr.json").exists() else {}
     by_sid = {s["id"]: s for s in societies}
     for url in set(ai_plans) | set(ocr_plans):
         o, j = ocr_plans.get(url, {}), ai_plans.get(url, {})
@@ -319,7 +319,7 @@ def main(city="gurgaon"):
     # bedroom sizes OCR'd from builder brochure pages. A page can hold two unit plans side by side, so a
     # brochure reading is never "complete": a failing room still fails, passing rooms only make it "likely".
     br_file = vdir / f"{city}-brochures.json"
-    brochures = json.loads(br_file.read_text())["brochures"] if br_file.exists() else {}
+    brochures = json.loads(br_file.read_text(encoding="utf-8"))["brochures"] if br_file.exists() else {}
     for sid, b in brochures.items():
         s = by_sid.get(sid)
         if not s or s.get("verified") or b.get("status") != "read":
@@ -337,7 +337,7 @@ def main(city="gurgaon"):
 
     # bedroom sizes OCR'd from HRERA filings (approved building plans, floor plan drawings); same caution as brochures
     hr_file = vdir / f"{city}-hrera.json"
-    hrera = json.loads(hr_file.read_text())["societies"] if hr_file.exists() else {}
+    hrera = json.loads(hr_file.read_text(encoding="utf-8"))["societies"] if hr_file.exists() else {}
     for sid, h in hrera.items():
         s = by_sid.get(sid)
         if not s or s.get("verified"):
@@ -356,7 +356,7 @@ def main(city="gurgaon"):
 
     # floor plans found on other sites by the plan finder, then OCR'd (found_ocr.py)
     fd_file = vdir / f"{city}-found.json"
-    found = json.loads(fd_file.read_text())["societies"] if fd_file.exists() else {}
+    found = json.loads(fd_file.read_text(encoding="utf-8"))["societies"] if fd_file.exists() else {}
     for sid, reads in found.items():
         s = by_sid.get(sid)
         if not s or s.get("verified"):
@@ -384,7 +384,7 @@ def main(city="gurgaon"):
 
     # nearby places from OpenStreetMap
     pois_file = out / "osm_pois.json"
-    pois = json.loads(pois_file.read_text()) if pois_file.exists() else []
+    pois = json.loads(pois_file.read_text(encoding="utf-8")) if pois_file.exists() else []
     poi_grid = Grid(pois, lambda q: (q["lng"], q["lat"]))
     for s in societies:
         here = (s["lng"], s["lat"])
@@ -475,7 +475,7 @@ def main(city="gurgaon"):
     (WEB / f"{city}-shapes.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": shapes}, separators=(",", ":")))
     from collections import Counter
     built = sorted(p.stem for p in WEB.glob("*.json") if p.stem != "cities")
-    all_cfg = json.loads((ROOT.parent / "data" / "cities.json").read_text())
+    all_cfg = json.loads((ROOT.parent / "data" / "cities.json").read_text(encoding="utf-8"))
     (WEB / "cities.json").write_text(json.dumps({c: {"name": all_cfg[c]["name"]} for c in built if c in all_cfg}))
     print(doc["counts"], Counter(s["shape"] for s in societies), Counter(s["kind"] for s in societies), "features", len(shapes))
 
@@ -487,7 +487,7 @@ def write_csv(soc_path, unit_path, societies):
     for b in range(1, 6):
         cols += [f"buy_{b}bhk_median", f"buy_{b}bhk_estimate", f"rent_{b}bhk_median", f"rent_{b}bhk_estimate", f"{b}bhk_price_flag"]
     cols += ["rating", "rating_count", "review_count", "amenities", "verified", "smallest_bedroom_ft", "magicbricks_url", "google_maps_url"]
-    with open(soc_path, "w", newline="") as f:
+    with open(soc_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(cols)
         for s in societies:
@@ -503,7 +503,7 @@ def write_csv(soc_path, unit_path, societies):
             row += [s["rating"], s["rating_count"], s["review_count"], "; ".join(s["amenities"]), s["verified"],
                     f"{smallest[0]:.2f} x {smallest[1]:.2f}" if smallest else None, s["url"], s["gmaps"]]
             w.writerow(row)
-    with open(unit_path, "w", newline="") as f:
+    with open(unit_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["society_id", "society", "unit", "bhk", "super_sqft", "carpet_sqft", "listed_sqft", "bedrooms_ft", "all_bedrooms_read",
                     "ai_narrowest_bedroom_ft", "ai_every_bedroom_long_side_at_least_ft", "ai_every_bedroom_area_at_least_sqft", "confidence", "source", "page"])

@@ -12,7 +12,7 @@ import urllib.request
 ROOT = pathlib.Path(__file__).parent
 CACHE = ROOT / "cache" / "osm"
 OUT = ROOT / "out"
-CITIES = json.loads((ROOT.parent / "data" / "cities.json").read_text())
+CITIES = json.loads((ROOT.parent / "data" / "cities.json").read_text(encoding="utf-8"))
 CITY = next((a for a in sys.argv[1:] if a in CITIES), "gurgaon")
 BBOX = tuple(CITIES[CITY]["bbox"])  # south, west, north, east
 OUT = OUT / CITY
@@ -28,7 +28,7 @@ def overpass(query, name):
     CACHE.mkdir(parents=True, exist_ok=True)
     f = CACHE / f"{name}.json"
     if f.exists():
-        return json.loads(f.read_text())
+        return json.loads(f.read_text(encoding="utf-8"))
     body = urllib.parse.urlencode({"data": query}).encode()
     for url in MIRRORS * 2:
         try:

@@ -74,9 +74,9 @@ def read_brochure(job):
 
 
 def main(city="gurgaon"):
-    data = json.loads((ROOT.parent / "web" / "public" / "data" / f"{city}.json").read_text())
+    data = json.loads((ROOT.parent / "web" / "public" / "data" / f"{city}.json").read_text(encoding="utf-8"))
     out_file = ROOT.parent / "data" / "verified" / f"{city}-brochures.json"
-    done = json.loads(out_file.read_text())["brochures"] if out_file.exists() else {}
+    done = json.loads(out_file.read_text(encoding="utf-8"))["brochures"] if out_file.exists() else {}
     def has_rooms(s):
         return any(u.get("bedrooms") or u.get("ai") for u in s["unit_types"])
     pool = [s for s in data["societies"] if s["kind"] in ("apartment", "builder floor")

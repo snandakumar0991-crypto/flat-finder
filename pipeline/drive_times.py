@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 
 ROOT = pathlib.Path(__file__).parent
-CITIES = json.loads((ROOT.parent / "data" / "cities.json").read_text())
+CITIES = json.loads((ROOT.parent / "data" / "cities.json").read_text(encoding="utf-8"))
 UA = "flat-finder/0.1 (personal use)"
 OSRM = "https://router.project-osrm.org/table/v1/driving/"
 CHUNK = 80  # societies per OSRM request, plus the anchors
@@ -76,11 +76,11 @@ def main(city):
         raise SystemExit(f"{city} has no anchors in data/cities.json")
     (out / "anchors.json").write_text(json.dumps(anchors, indent=1))
     cache_f = out / "drive_times.json"
-    cache = json.loads(cache_f.read_text()) if cache_f.exists() else {}
+    cache = json.loads(cache_f.read_text(encoding="utf-8")) if cache_f.exists() else {}
     key = "|".join(f"{a['key']}@{a['lat']:.5f},{a['lng']:.5f}" for a in anchors)
     if cache.get("_anchors") != key:
         cache = {"_anchors": key}  # anchors moved: recompute everything
-    projects = [p for p in json.loads((out / "mb_projects.json").read_text()) if p.get("lat") and p.get("lng")]
+    projects = [p for p in json.loads((out / "mb_projects.json").read_text(encoding="utf-8")) if p.get("lat") and p.get("lng")]
     todo = [p for p in projects if str(p["mb_id"]) not in cache]
     print(f"{len(projects)} located projects, {len(todo)} to route")
     for i in range(0, len(todo), CHUNK):
