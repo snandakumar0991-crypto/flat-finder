@@ -137,7 +137,7 @@ export function matchSociety(s, c) {
   let driveUnknown = false;
   for (const [key, lim] of Object.entries(c.maxDrive || {})) {
     if (!lim) continue;
-    const m = s.drive?.[key]?.min;
+    const m = driveTime(s, key);
     if (m == null) driveUnknown = true;
     else if (m > lim) return 'no';
   }
@@ -165,6 +165,30 @@ export function feetLabel(ft) {
 
 // Cheapest price for the chosen BHKs: listing median first, our estimate otherwise. null when unknown.
 // Medians flagged as likely typos (p.flags) are skipped, so one mistyped listing cannot hide or promote a society.
+// Drive minutes to an anchor: the real-world estimate when calibrated, else the no-traffic time.
+export function driveTime(s, key) {
+  const d = s.drive?.[key];
+  return d ? d.real ?? d.min ?? null : null;
+}
+
+// Scale no-traffic times by how much slower your real trips are from the baseline home.
+// factor[key] = your real minutes from the baseline / its no-traffic minutes. Sets d.real on every society.
+export function calibrate(societies, baseline) {
+  const name = baseline?.name?.toLowerCase();
+  const real = baseline?.real_min || {};
+  const base = name && (societies.find((s) => s.name.toLowerCase() === name) || societies.find((s) => s.name.toLowerCase().includes(name)));
+  const factor = {};
+  for (const [key, mins] of Object.entries(real)) {
+    const free = base?.drive?.[key]?.min;
+    if (mins && free) factor[key] = mins / free;
+  }
+  for (const s of societies) for (const [key, f] of Object.entries(factor)) {
+    const d = s.drive?.[key];
+    if (d?.min != null) d.real = Math.round(d.min * f);
+  }
+  return { base, factor };
+}
+
 export function priceFor(s, mode, bhk = []) {
   let best = null;
   for (const [b, p] of Object.entries(s.prices || {})) {
