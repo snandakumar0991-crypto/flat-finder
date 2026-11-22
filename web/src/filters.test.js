@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CRITERIA, calibrate, driveTime, feetLabel, matchSociety, roomPasses } from './filters.js';
+import { DEFAULT_CRITERIA, calibrate, driveTime, feetLabel, isGated, matchSociety, roomPasses } from './filters.js';
 
 const ROOM = { a: 11.25, b: 12.25 }; // 11'3" x 12'3"
 const soc = (over = {}) => ({ kind: 'apartment', status: 'Ready To Move', amenities: [], amen_facts: {}, unit_types: [], ...over });
@@ -175,5 +175,23 @@ describe('calibrate to real trips', () => {
     const s = { ...mk('A', 12, 12), kind: 'apartment', amenities: [], unit_types: [], prices: {} };
     calibrate([mk('Base', 12, 12), s], { name: 'Base', real_min: { school: 30 } });
     expect(matchSociety(s, { ...structuredClone(DEFAULT_CRITERIA), maxDrive: { school: 25 } })).toBe('no');
+  });
+});
+
+describe('gated communities', () => {
+  const s = (over) => ({ id: 'x', name: 'X', kind: 'apartment', amenities: [], amen_facts: {}, unit_types: [], prices: {}, ...over });
+  it('counts big projects, several towers, or a pool or clubhouse', () => {
+    expect(isGated(s({ units: 400 }))).toBe(true);
+    expect(isGated(s({ units: '150' }))).toBe(true);
+    expect(isGated(s({ towers: 3 }))).toBe(true);
+    expect(isGated(s({ units: 24, amenities: ['Swimming Pool'] }))).toBe(true);
+    expect(isGated(s({ units: 24, amenities: ['Club House'] }))).toBe(true);
+    expect(isGated(s({ units: 24, towers: 1, amenities: ['Lift', 'Power Back Up'] }))).toBe(false);
+    expect(isGated(s({}))).toBe(false);
+  });
+  it('drops standalone buildings when the filter is on', () => {
+    const c = { ...structuredClone(DEFAULT_CRITERIA), gated: true };
+    expect(matchSociety(s({ units: 24 }), c)).toBe('no');
+    expect(matchSociety(s({ units: 600 }), c)).toBe('match');
   });
 });

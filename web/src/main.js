@@ -25,7 +25,7 @@ const AMEN_LABELS = { squash: 'Squash', pool: 'Pool', gym: 'Gym', club: 'Clubhou
 const DIVY = { // Divy's own Gurugram search, shown as the example
   ...structuredClone(DEFAULT_CRITERIA), kinds: ['apartment'], bhk: [2, 3, 4], roomArea: 138, minSqft: 1620, amenities: ['squash'] }; // 11'3" x 12'3" = 138 sq ft
 const HYD = { // our Hyderabad search: gated 3 BHK to rent, closer than My Home Vihanga (30 min to school, 40 to office today)
-  ...structuredClone(DEFAULT_CRITERIA), kinds: ['apartment'], bhk: [3], mode: 'rent', maxRent: 75000, maxDrive: { school: 25, office: 40 } };
+  ...structuredClone(DEFAULT_CRITERIA), kinds: ['apartment'], bhk: [3], mode: 'rent', maxRent: 75000, maxDrive: { school: 25, office: 40 }, gated: true };
 const presetFor = () => (cityId === 'hyderabad' ? HYD : DIVY);
 const STATE_LABEL = { match: 'Matches your search', likely: 'Likely match', probable: 'Probably fits (estimated)', unknown: 'Not checked yet', no: 'Does not match' };
 
@@ -215,6 +215,7 @@ function buildFilters() {
       : { min: 0, max: 20, step: 0.25, fmt: (v, end) => (end === 'hi' && v >= 20 ? 'Any' : v ? formatINR(v * 1e7) : '₹0') });
     priceSlider.set(rent ? (crit.minRent || 0) / 1000 : (crit.minPrice || 0) / 1e7, rent ? (crit.maxRent ? crit.maxRent / 1000 : 500) : (crit.maxPrice ? crit.maxPrice / 1e7 : 20));
     $('f-ready').checked = crit.ready;
+    $('f-gated').checked = !!crit.gated;
     driveShows.forEach((f) => f());
     $('f-only').checked = !!crit.only;
     if (!$('amen-more').hidden) amenList();
@@ -243,6 +244,7 @@ function buildFilters() {
   $('f-est').onchange = () => { crit.estimates = $('f-est').checked; applyFilters(); };
   $('amen-q').oninput = amenList;
   $('f-ready').onchange = () => { crit.ready = $('f-ready').checked; applyFilters(); };
+  $('f-gated').onchange = () => { crit.gated = $('f-gated').checked; applyFilters(); };
   $('f-sort').onchange = () => { sortBy = $('f-sort').value; renderResults(); };
   $('preset-divy').onclick = () => useCriteria(presetFor());
   if (cityId === 'hyderabad') $('preset-divy').textContent = 'Load our search';
