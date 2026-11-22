@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CRITERIA, feetLabel, matchSociety, roomPasses } from './filters.js';
+import { DEFAULT_CRITERIA, calibrate, driveTime, feetLabel, matchSociety, roomPasses } from './filters.js';
 
 const ROOM = { a: 11.25, b: 12.25 }; // 11'3" x 12'3"
 const soc = (over = {}) => ({ kind: 'apartment', status: 'Ready To Move', amenities: [], amen_facts: {}, unit_types: [], ...over });
@@ -151,5 +151,29 @@ describe('drive time to anchors', () => {
   });
   it('ignores an empty limit', () => {
     expect(matchSociety(soc(90), c(null))).toBe('match');
+  });
+});
+
+describe('calibrate to real trips', () => {
+  const mk = (name, school, office) => ({ name, drive: { school: { min: school }, office: { min: office } } });
+  it('scales every society by the baseline home factor', () => {
+    const list = [mk('My Home Vihanga', 12, 16), mk('Near', 4, 8), mk('Unrouted', null, null)];
+    const { base, factor } = calibrate(list, { name: 'My Home Vihanga', real_min: { school: 30, office: 40 } });
+    expect(base.name).toBe('My Home Vihanga');
+    expect(factor.school).toBe(2.5);
+    expect(driveTime(list[0], 'school')).toBe(30);
+    expect(driveTime(list[1], 'school')).toBe(10);
+    expect(driveTime(list[1], 'office')).toBe(20);
+    expect(driveTime(list[2], 'school')).toBe(null);
+  });
+  it('falls back to no-traffic minutes without a baseline', () => {
+    const list = [mk('A', 7, 9)];
+    expect(calibrate(list, null).factor).toEqual({});
+    expect(driveTime(list[0], 'school')).toBe(7);
+  });
+  it('filters on the calibrated time', () => {
+    const s = { ...mk('A', 12, 12), kind: 'apartment', amenities: [], unit_types: [], prices: {} };
+    calibrate([mk('Base', 12, 12), s], { name: 'Base', real_min: { school: 30 } });
+    expect(matchSociety(s, { ...structuredClone(DEFAULT_CRITERIA), maxDrive: { school: 25 } })).toBe('no');
   });
 });

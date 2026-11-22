@@ -7,7 +7,8 @@
       { "key": "school", "label": "Anthea Montessori", "address": "Plot 2, Shilpi Valley, Gafoor Nagar, Madhapur, Hyderabad 500081", "query": "Shilpi Valley, Madhapur, Hyderabad" },
       { "key": "office", "label": "Sattva Knowledge City", "address": "Silpa Gram Craft Village, HITEC City, Hyderabad 500032", "query": "Sattva Knowledge City, Hyderabad" }
     ],
-    "baseline": { "name": "My Home Vihanga", "rent": 64000, "maintenance": 8000 },
+    "baseline": { "name": "My Home Vihanga", "rent": 64000, "maintenance": 8000, "budget_all_in": 80000, "target_rent": 70000,
+                  "real_min": { "school": 30, "office": 40 } },
     "crawl_filter": {
       "pincodes": ["500032", "500081", "500084", "500089", "500075", "500046", "500033", "500096", "500104", "500008", "500019"],
       "localities": ["madhapur", "hitec", "hitech", "gachibowli", "kondapur", "raidurg", "rai durg", "khajaguda", "manikonda", "nanakramguda",

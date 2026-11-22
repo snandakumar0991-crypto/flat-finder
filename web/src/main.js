@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import { addBaseLayers, addSocietyLayers, BASE_MODES, createMap, OVERVIEW, setBaseMode, setHighlights, setSelected, setStates, startPulse } from './map.js';
 import { searchSocieties } from './search.js';
 import { createFeed } from './feed.js';
-import { AMENITY_KEYS, DEFAULT_CRITERIA, NEAR, RANK, feetLabel, formatINR, matchSociety, matchUnit, priceFor, roomPasses } from './filters.js';
+import { AMENITY_KEYS, DEFAULT_CRITERIA, NEAR, RANK, calibrate, driveTime, feetLabel, formatINR, matchSociety, matchUnit, priceFor, roomPasses } from './filters.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -24,15 +24,15 @@ const KINDS = [
 const AMEN_LABELS = { squash: 'Squash', pool: 'Pool', gym: 'Gym', club: 'Clubhouse', tennis: 'Tennis', badminton: 'Badminton', jogging: 'Jogging track', kids: 'Kids play' };
 const DIVY = { // Divy's own Gurugram search, shown as the example
   ...structuredClone(DEFAULT_CRITERIA), kinds: ['apartment'], bhk: [2, 3, 4], roomArea: 138, minSqft: 1620, amenities: ['squash'] }; // 11'3" x 12'3" = 138 sq ft
-const HYD = { // our Hyderabad search: gated 3 BHK to rent near the school first, then the office
-  ...structuredClone(DEFAULT_CRITERIA), kinds: ['apartment'], bhk: [3], mode: 'rent', maxRent: 75000, maxDrive: { school: 20, office: 25 } };
+const HYD = { // our Hyderabad search: gated 3 BHK to rent, closer than My Home Vihanga (30 min to school, 40 to office today)
+  ...structuredClone(DEFAULT_CRITERIA), kinds: ['apartment'], bhk: [3], mode: 'rent', maxRent: 75000, maxDrive: { school: 25, office: 40 } };
 const presetFor = () => (cityId === 'hyderabad' ? HYD : DIVY);
 const STATE_LABEL = { match: 'Matches your search', likely: 'Likely match', probable: 'Probably fits (estimated)', unknown: 'Not checked yet', no: 'Does not match' };
 
 let crit = structuredClone(DEFAULT_CRITERIA);
 let baseMode = BASE_MODES.includes(params.get('map')) ? params.get('map') : 'streets';
 let roomMode = 'off', areaUnit = 'gaj', sortBy = 'best';
-let data, byId, map, feed, selected = null, states = new Map(), tourTimer = null, cityId = 'gurgaon', details = null;
+let calib = { base: null, factor: {} }, data, byId, map, feed, selected = null, states = new Map(), tourTimer = null, cityId = 'gurgaon', details = null;
 let myList = [], allAmenities = [];
 const highlights = { glow: true, bounds: true, labels: true, ...store.get('ff-highlights', {}) };
 
@@ -44,6 +44,7 @@ async function boot() {
     fetch(`/data/${cityId}-shapes.geojson`).then((r) => r.json()),
   ]);
   data = city;
+  calib = calibrate(city.societies, city.baseline);
   OVERVIEW.center = city.city.center;
   OVERVIEW.zoom = city.city.zoom || OVERVIEW.zoom;
   byId = new Map(city.societies.map((s) => [s.id, s]));
@@ -289,7 +290,7 @@ function applyFilters(wave = false) {
   renderResults();
   if (selected) renderCard(byId.get(selected));
 }
-const driveMin = (s, key) => s.drive?.[key]?.min ?? Infinity;
+const driveMin = (s, key) => driveTime(s, key) ?? Infinity;
 const dist = (s, c) => (s.lng - c[0]) ** 2 + (s.lat - c[1]) ** 2;
 
 function sorted(list) {
@@ -343,10 +344,12 @@ function resultItem(s) {
   const p = priceFor(s, crit.mode, crit.bhk);
   const money = p ? `${p.estimated ? '~' : ''}${formatINR(p.value)}${crit.mode === 'rent' ? '/mo' : ''}` : '';
   const how = s.verified ? ' · checked by hand' : s.ai_read ? ' · AI-read plans' : '';
-  const drive = (data.anchors || []).map((x) => s.drive?.[x.key]?.min != null && `${Math.round(s.drive[x.key].min)} min to ${esc(x.key)}`).filter(Boolean).join(', ');
+  const drive = (data.anchors || []).map((x) => driveTime(s, x.key) != null && `${calib.factor[x.key] ? '≈' : ''}${Math.round(driveTime(s, x.key))} min to ${esc(x.key)}`).filter(Boolean).join(', ');
+  const target = data.baseline?.target_rent;
+  const stretch = crit.mode === 'rent' && target && p && !p.estimated && p.value > target ? '<small class="stretch">stretch</small>' : '';
   const how2 = how + (drive ? ' · ' + drive : '');
   li.innerHTML = `<span class="nm">${myList.includes(s.id) ? '★ ' : ''}${esc(s.name)}<small>${esc(s.locality || '')}${how2}</small></span>
-    <span class="tag ${st}">${money}${s.score != null ? `<small>score ${s.score}</small>` : ''}</span>`;
+    <span class="tag ${st}">${money}${stretch}${s.score != null ? `<small>score ${s.score}</small>` : ''}</span>`;
   li.onclick = () => { stopTour(); openSociety(s.id); };
   return li;
 }
@@ -388,24 +391,27 @@ function closeCard() {
 const metres = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m / 10) * 10} m`);
 
 // Drive time to each anchor, and how it compares with where you live now (the city's "baseline").
-function baselineSociety() {
-  const name = data.baseline?.name?.toLowerCase();
-  return name ? data.societies.find((s) => s.name.toLowerCase() === name) || data.societies.find((s) => s.name.toLowerCase().includes(name)) : null;
-}
+function baselineSociety() { return calib.base || null; }
 function driveRows(s) {
   const anchors = data.anchors || [];
   if (!anchors.length) return '';
   const base = baselineSociety();
   const rows = anchors.map((a) => {
     const d = s.drive?.[a.key] || {};
-    const bm = base && base.id !== s.id ? base.drive?.[a.key]?.min : null;
-    const diff = d.min != null && bm != null ? Math.round(d.min - bm) : null;
-    const vs = diff == null ? '' : diff === 0 ? ` · same as ${esc(base.name)}` : ` · ${Math.abs(diff)} min ${diff < 0 ? 'closer than' : 'further than'} ${esc(base.name)}`;
-    return `<div><span>${esc(a.label)}</span><b>${d.min != null ? Math.round(d.min) + ' min' : 'no route yet'}</b><small>${d.km != null ? d.km + ' km by road · ' : ''}${d.air_km ?? '?'} km straight${vs}</small></div>`;
+    const t = driveTime(s, a.key), bt = base && base.id !== s.id ? driveTime(base, a.key) : null;
+    const diff = t != null && bt != null ? Math.round(t - bt) : null;
+    const vs = diff == null ? '' : diff === 0 ? ` · same as ${esc(base.name)}` : ` · ${Math.abs(diff)} min ${diff < 0 ? 'quicker than' : 'slower than'} ${esc(base.name)}`;
+    const real = d.real != null ? `≈${d.real} min` : null;
+    return `<div><span>${esc(a.label)}</span><b>${real || (d.min != null ? Math.round(d.min) + ' min' : 'no route yet')}</b><small>${real ? `${Math.round(d.min)} min with no traffic · ` : ''}${d.km != null ? d.km + ' km by road · ' : ''}${d.air_km ?? '?'} km straight${vs}</small></div>`;
   }).join('');
   const b = data.baseline;
-  const cost = b?.rent ? `<div class="fine">Now: ${esc(b.name)} at ${formatINR(b.rent)} rent + ${formatINR(b.maintenance || 0)} maintenance = ${formatINR(b.rent + (b.maintenance || 0))}/mo. Rents here are listing medians and do not include maintenance.</div>` : '';
-  return `<h4>Getting there</h4><div class="near">${rows}</div><div class="fine">Times are by road with no traffic (OSRM). Peak hour is slower.</div>${cost}`;
+  const cost = b?.rent ? `<div class="fine">Now: ${esc(b.name)} at ${formatINR(b.rent)} rent + ${formatINR(b.maintenance || 0)} maintenance = ${formatINR(b.rent + (b.maintenance || 0))}/mo.${b.budget_all_in ? ` Budget ${formatINR(b.budget_all_in)} all-in, so rent up to about ${formatINR(b.target_rent)}; above that is marked "stretch".` : ''} Rents here are listing medians and do not include maintenance.</div>` : '';
+  const how = Object.keys(calib.factor).length
+    ? `"≈" times are road times with no traffic, scaled by how much slower your real trips from ${esc(b.name)} are (${Object.entries(b.real_min || {}).map(([k, m]) => `${m} min to ${esc(k)}`).join(', ')}). Traffic varies by road, so check your shortlist in Google Maps at your real leaving time.`
+    : 'Times are by road with no traffic (OSRM). Peak hour is slower.';
+  const q = encodeURIComponent(`"${s.name}" 3 BHK rent`);
+  const links = data.anchors?.length ? `<div class="row-gap"><a class="linkbtn" href="https://www.google.com/search?q=site%3Anobroker.in+${q}" target="_blank" rel="noopener">See 3 BHK rentals on NoBroker</a><a class="linkbtn" href="https://www.google.com/search?q=site%3A99acres.com+${q}" target="_blank" rel="noopener">See 3 BHK rentals on 99acres</a></div>` : '';
+  return `<h4>Getting there</h4><div class="near">${rows}</div><div class="fine">${how}</div>${cost}${links}`;
 }
 
 function renderCard(s) {
