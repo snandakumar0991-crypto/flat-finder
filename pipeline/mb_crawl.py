@@ -78,6 +78,16 @@ def crawl_projects():
         before = len(index)
         index = [p for p in index if in_scope(p, flt)]
         print(f"crawl_filter: {len(index)} of {before} projects are in the search area", flush=True)
+        if flt.get("kinds"):  # e.g. only apartments: skip plots, villas, commercial (kind from the list card)
+            import build_city
+            keep = set(flt["kinds"]) | {"other"}  # "other" = not known from the card yet: keep it
+            index = [p for p in index if build_city.kind_of(p).rstrip("~") in keep]
+            print(f"crawl_filter: {len(index)} after keeping only {', '.join(flt['kinds'])}", flush=True)
+        if flt.get("priority_localities"):  # crawl the closest areas first, so a partial build is already useful
+            pri = flt["priority_localities"]
+            rank = lambda p: next((i for i, w in enumerate(pri) if w in (p.get("locality") or "").lower()), len(pri))
+            index.sort(key=rank)
+            print(f"crawl_filter: {sum(1 for p in index if rank(p) < len(pri))} projects in priority localities go first", flush=True)
     from concurrent.futures import ThreadPoolExecutor
 
     def one(p):

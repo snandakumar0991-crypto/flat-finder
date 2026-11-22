@@ -73,3 +73,12 @@ def test_crawl_filter_by_pincode_or_locality():
     assert mb_crawl.in_scope({"pincode": None, "locality": "Kondapur, Hyderabad"}, flt)
     assert not mb_crawl.in_scope({"pincode": "500039", "locality": "Uppal"}, flt)
     assert mb_crawl.in_scope({"pincode": "500039", "locality": "Uppal"}, None)
+
+
+def test_crawl_order_puts_priority_localities_first():
+    import sys
+    sys.argv = ["mb_crawl.py", "list", "hyderabad"]
+    import importlib, mb_crawl
+    importlib.reload(mb_crawl)
+    flt = mb_crawl.CFG["crawl_filter"]
+    assert "apartment" in flt["kinds"] and flt["priority_localities"][0] == "madhapur"
