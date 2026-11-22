@@ -20,6 +20,7 @@ export const DEFAULT_CRITERIA = {
   maxRent: null,    // rupees per month, renting
   amenities: [],    // amenity keys, see AMENITY_KEYS
   ready: false,     // only ready to move
+  maxDrive: {},     // anchor key -> max drive minutes (no traffic), e.g. { school: 20 }
 };
 
 // Amenity keys -> words that identify them in portal amenity names.
@@ -133,9 +134,17 @@ export function matchSociety(s, c) {
     if (p && floor && p.value < floor) return 'no';
   }
   for (const key of c.amenities) if (!hasAmenity(s, key)) return 'no';
+  let driveUnknown = false;
+  for (const [key, lim] of Object.entries(c.maxDrive || {})) {
+    if (!lim) continue;
+    const m = s.drive?.[key]?.min;
+    if (m == null) driveUnknown = true;
+    else if (m > lim) return 'no';
+  }
+  const capped = (r) => (driveUnknown && RANK[r] > RANK.unknown ? 'unknown' : r); // no route yet: never a match
 
   const unitFilters = c.bhk.length || c.minSqft > 0 || c.maxSqft || c.room || c.roomArea;
-  if (!unitFilters) return 'match';
+  if (!unitFilters) return capped('match');
   const units = s.unit_types.filter((u) => !c.bhk.length || c.bhk.includes(u.bhk));
   if (!units.length) return s.unit_types.length ? 'no' : 'unknown';
   let best = 'no';
@@ -144,7 +153,7 @@ export function matchSociety(s, c) {
     if (RANK[r] > RANK[best]) best = r;
     if (best === 'match') break;
   }
-  return best;
+  return capped(best);
 }
 
 export function feetLabel(ft) {

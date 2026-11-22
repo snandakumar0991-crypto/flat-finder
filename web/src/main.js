@@ -24,6 +24,9 @@ const KINDS = [
 const AMEN_LABELS = { squash: 'Squash', pool: 'Pool', gym: 'Gym', club: 'Clubhouse', tennis: 'Tennis', badminton: 'Badminton', jogging: 'Jogging track', kids: 'Kids play' };
 const DIVY = { // Divy's own Gurugram search, shown as the example
   ...structuredClone(DEFAULT_CRITERIA), kinds: ['apartment'], bhk: [2, 3, 4], roomArea: 138, minSqft: 1620, amenities: ['squash'] }; // 11'3" x 12'3" = 138 sq ft
+const HYD = { // our Hyderabad search: gated 3 BHK to rent near the school first, then the office
+  ...structuredClone(DEFAULT_CRITERIA), kinds: ['apartment'], bhk: [3], mode: 'rent', maxRent: 75000, maxDrive: { school: 20, office: 25 } };
+const presetFor = () => (cityId === 'hyderabad' ? HYD : DIVY);
 const STATE_LABEL = { match: 'Matches your search', likely: 'Likely match', probable: 'Probably fits (estimated)', unknown: 'Not checked yet', no: 'Does not match' };
 
 let crit = structuredClone(DEFAULT_CRITERIA);
@@ -97,7 +100,7 @@ async function boot() {
 
 function intro() {
   closeCard();
-  if (params.get('preset') === 'divy') useCriteria(DIVY);
+  if (params.get('preset') === 'divy' || params.get('preset') === 'ours') useCriteria(presetFor());
   if (params.get('open')) {
     map.jumpTo(OVERVIEW);
     applyFilters();
@@ -166,6 +169,7 @@ function useCriteria(c) {
 }
 
 let redrawFilters = () => {};
+const driveShows = [];
 let sizeSlider, priceSlider;
 function buildFilters() {
   const amenList = () => {
@@ -210,6 +214,7 @@ function buildFilters() {
       : { min: 0, max: 20, step: 0.25, fmt: (v, end) => (end === 'hi' && v >= 20 ? 'Any' : v ? formatINR(v * 1e7) : '₹0') });
     priceSlider.set(rent ? (crit.minRent || 0) / 1000 : (crit.minPrice || 0) / 1e7, rent ? (crit.maxRent ? crit.maxRent / 1000 : 500) : (crit.maxPrice ? crit.maxPrice / 1e7 : 20));
     $('f-ready').checked = crit.ready;
+    driveShows.forEach((f) => f());
     $('f-only').checked = !!crit.only;
     if (!$('amen-more').hidden) amenList();
     labels();
@@ -238,7 +243,21 @@ function buildFilters() {
   $('amen-q').oninput = amenList;
   $('f-ready').onchange = () => { crit.ready = $('f-ready').checked; applyFilters(); };
   $('f-sort').onchange = () => { sortBy = $('f-sort').value; renderResults(); };
-  $('preset-divy').onclick = () => useCriteria(DIVY);
+  $('preset-divy').onclick = () => useCriteria(presetFor());
+  if (cityId === 'hyderabad') $('preset-divy').textContent = 'Load our search';
+  const anchors = data.anchors || [];
+  $('f-drive-wrap').hidden = !anchors.length;
+  $('f-drive').replaceChildren(...anchors.map((a) => {
+    const d = document.createElement('div');
+    d.innerHTML = `<div class="k row">${esc(a.label)} <span class="val"></span></div><input type="range" min="5" max="60" step="5" aria-label="Most minutes to ${esc(a.label)}">`;
+    const r = d.querySelector('input'), v = d.querySelector('.val');
+    const show = () => { const m = crit.maxDrive?.[a.key]; r.value = m || 60; v.textContent = m ? `up to ${m} min` : 'Any'; };
+    r.oninput = () => { crit.maxDrive = { ...crit.maxDrive, [a.key]: +r.value >= 60 ? null : +r.value }; show(); applyFilters(); };
+    driveShows.push(show); show();
+    return d;
+  }));
+  for (const a of anchors) $('f-sort').add(new Option(`Closest to ${a.label}`, 'drive:' + a.key));
+  if (anchors.length) { sortBy = 'drive:' + anchors[0].key; $('f-sort').value = sortBy; }
   $('btn-replay').onclick = intro;
   $('btn-tour').onclick = tour;
   $('btn-hide').onclick = () => document.body.classList.toggle('bare');
@@ -270,6 +289,7 @@ function applyFilters(wave = false) {
   renderResults();
   if (selected) renderCard(byId.get(selected));
 }
+const driveMin = (s, key) => s.drive?.[key]?.min ?? Infinity;
 const dist = (s, c) => (s.lng - c[0]) ** 2 + (s.lat - c[1]) ** 2;
 
 function sorted(list) {
@@ -280,7 +300,7 @@ function sorted(list) {
     rating: (a, b) => (b.rating || 0) - (a.rating || 0) || (b.rating_count || 0) - (a.rating_count || 0),
     price: (a, b) => price(a) - price(b),
     listings: (a, b) => ((b.sale_count || 0) + (b.rent_count || 0)) - ((a.sale_count || 0) + (a.rent_count || 0)),
-  }[sortBy];
+  }[sortBy] || ((a, b) => driveMin(a, sortBy.slice(6)) - driveMin(b, sortBy.slice(6))); // 'drive:<anchor key>'
   return list.sort(by);
 }
 
@@ -323,7 +343,9 @@ function resultItem(s) {
   const p = priceFor(s, crit.mode, crit.bhk);
   const money = p ? `${p.estimated ? '~' : ''}${formatINR(p.value)}${crit.mode === 'rent' ? '/mo' : ''}` : '';
   const how = s.verified ? ' · checked by hand' : s.ai_read ? ' · AI-read plans' : '';
-  li.innerHTML = `<span class="nm">${myList.includes(s.id) ? '★ ' : ''}${esc(s.name)}<small>${esc(s.locality || '')}${how}</small></span>
+  const drive = (data.anchors || []).map((x) => s.drive?.[x.key]?.min != null && `${Math.round(s.drive[x.key].min)} min to ${esc(x.key)}`).filter(Boolean).join(', ');
+  const how2 = how + (drive ? ' · ' + drive : '');
+  li.innerHTML = `<span class="nm">${myList.includes(s.id) ? '★ ' : ''}${esc(s.name)}<small>${esc(s.locality || '')}${how2}</small></span>
     <span class="tag ${st}">${money}${s.score != null ? `<small>score ${s.score}</small>` : ''}</span>`;
   li.onclick = () => { stopTour(); openSociety(s.id); };
   return li;
@@ -364,6 +386,27 @@ function closeCard() {
 }
 
 const metres = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m / 10) * 10} m`);
+
+// Drive time to each anchor, and how it compares with where you live now (the city's "baseline").
+function baselineSociety() {
+  const name = data.baseline?.name?.toLowerCase();
+  return name ? data.societies.find((s) => s.name.toLowerCase() === name) || data.societies.find((s) => s.name.toLowerCase().includes(name)) : null;
+}
+function driveRows(s) {
+  const anchors = data.anchors || [];
+  if (!anchors.length) return '';
+  const base = baselineSociety();
+  const rows = anchors.map((a) => {
+    const d = s.drive?.[a.key] || {};
+    const bm = base && base.id !== s.id ? base.drive?.[a.key]?.min : null;
+    const diff = d.min != null && bm != null ? Math.round(d.min - bm) : null;
+    const vs = diff == null ? '' : diff === 0 ? ` · same as ${esc(base.name)}` : ` · ${Math.abs(diff)} min ${diff < 0 ? 'closer than' : 'further than'} ${esc(base.name)}`;
+    return `<div><span>${esc(a.label)}</span><b>${d.min != null ? Math.round(d.min) + ' min' : 'no route yet'}</b><small>${d.km != null ? d.km + ' km by road · ' : ''}${d.air_km ?? '?'} km straight${vs}</small></div>`;
+  }).join('');
+  const b = data.baseline;
+  const cost = b?.rent ? `<div class="fine">Now: ${esc(b.name)} at ${formatINR(b.rent)} rent + ${formatINR(b.maintenance || 0)} maintenance = ${formatINR(b.rent + (b.maintenance || 0))}/mo. Rents here are listing medians and do not include maintenance.</div>` : '';
+  return `<h4>Getting there</h4><div class="near">${rows}</div><div class="fine">Times are by road with no traffic (OSRM). Peak hour is slower.</div>${cost}`;
+}
 
 function renderCard(s) {
   const st = states.get(s.id);
@@ -426,6 +469,7 @@ function renderCard(s) {
     ${trend}
     <h4>Bedrooms</h4>
     ${unitRows ? `<table><tr><th>Unit</th><th>Bedrooms</th><th></th><th>Source</th></tr>${unitRows}</table>` : '<div class="fine">No unit types listed.</div>'}
+    ${driveRows(s)}
     ${nearRows ? `<h4>Nearby</h4><div class="near">${nearRows}</div>` : ''}
     ${ratingBars ? `<h4>What residents rate</h4>${ratingBars}` : ''}${reviews}
     ${facts || amen ? `<h4>Amenities (${s.amenities.length})</h4><div class="amen">${facts}${amen}</div>` : ''}
