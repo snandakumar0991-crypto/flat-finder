@@ -20,6 +20,7 @@ export const DEFAULT_CRITERIA = {
   maxRent: null,    // rupees per month, renting
   amenities: [],    // amenity keys, see AMENITY_KEYS
   ready: false,     // only ready to move
+  gated: false,     // only gated communities, see isGated
   maxDrive: {},     // anchor key -> max drive minutes (no traffic), e.g. { school: 20 }
 };
 
@@ -47,6 +48,12 @@ export const NEAR = {
 export function isNear(s, key) {
   const n = NEAR[key];
   return n.kinds.some((k) => (s.nearby?.[k]?.m ?? Infinity) <= n.m);
+}
+
+// A gated community, judged from portal data: at least 150 units, at least 3 towers, or a pool or clubhouse listed.
+export const GATED_MIN_UNITS = 150;
+export function isGated(s) {
+  return Number(s.units) >= GATED_MIN_UNITS || Number(s.towers) >= 3 || hasAmenity(s, 'pool') || hasAmenity(s, 'club');
 }
 
 export function hasAmenity(s, key) {
@@ -126,6 +133,7 @@ export function matchSociety(s, c) {
   if (c.kinds.length && !c.kinds.includes(s.kind)) return 'no';
   for (const key of c.near || []) if (!isNear(s, key)) return 'no';
   if (c.ready && !/ready/i.test(s.status || '')) return 'no';
+  if (c.gated && !isGated(s)) return 'no';
   const budget = c.mode === 'rent' ? c.maxRent : c.maxPrice;
   const floor = c.mode === 'rent' ? c.minRent : c.minPrice;
   if (budget || floor) {
