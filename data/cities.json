@@ -9,6 +9,9 @@
     ],
     "baseline": { "name": "My Home Vihanga", "rent": 64000, "maintenance": 8000 },
     "crawl_filter": {
+      "kinds": ["apartment"],
+      "priority_localities": ["madhapur", "hitec", "hitech", "raidurg", "khajaguda", "kondapur", "kothaguda", "gachibowli", "nanakramguda",
+                              "financial district", "manikonda", "puppalaguda", "jubilee hills", "film nagar", "shaikpet"],
       "pincodes": ["500032", "500081", "500084", "500089", "500075", "500046", "500033", "500096", "500104", "500008", "500019"],
       "localities": ["madhapur", "hitec", "hitech", "gachibowli", "kondapur", "raidurg", "rai durg", "khajaguda", "manikonda", "nanakramguda",
                      "financial district", "narsingi", "puppalaguda", "kokapet", "jubilee hills", "film nagar", "shaikpet", "tolichowki",
