@@ -140,8 +140,14 @@ def merge_records(a, b):
                 seen.add(_key(l))
                 out.append(l)
         m[k] = out
-    for k in ("amenities", "images", "type_codes"):
-        m[k] = list(dict.fromkeys((base.get(k) or []) + (other.get(k) or [])))
+    for k in ("amenities", "images", "type_codes"):  # items may be strings or dicts (images are {thumb, full})
+        seen, out = set(), []
+        for x in (base.get(k) or []) + (other.get(k) or []):
+            key = json.dumps(x, sort_keys=True) if isinstance(x, (dict, list)) else x
+            if key not in seen:
+                seen.add(key)
+                out.append(x)
+        m[k] = out
     for k in ("units", "towers", "sale_count", "rent_count"):
         vals = [x for x in (base.get(k), other.get(k)) if isinstance(x, (int, float))]
         if vals:
