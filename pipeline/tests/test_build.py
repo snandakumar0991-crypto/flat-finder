@@ -49,6 +49,15 @@ def test_dedupe_combines_listings_without_doubling():
     assert sorted(l["price"] for l in m["rent_listings"]) == [66000, 70000]
 
 
+def test_dedupe_merges_image_objects():
+    img = {"thumb": "t1", "full": "f1"}
+    a = {"name": "Raasi Aspire", "lng": 78.38, "lat": 17.44, "url": "a", "images": [img], "amenities": ["Gym"]}
+    b = {"name": "Raasi Aspire", "lng": 78.38, "lat": 17.44, "url": "b", "images": [dict(img), {"thumb": "t2", "full": "f2"}],
+         "amenities": ["Gym", "Swimming Pool"]}
+    (m,) = build_city.dedupe([a, b])
+    assert [i["full"] for i in m["images"]] == ["f1", "f2"] and m["amenities"] == ["Gym", "Swimming Pool"]
+
+
 def test_config_bhks():
     assert build_city.config_bhks("3, 4, 5, 6 BHK Apartments") == [3, 4, 5, 6]
     assert build_city.config_bhks("2-4 BHK Flats") == [2, 3, 4]
