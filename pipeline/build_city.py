@@ -113,14 +113,61 @@ def match_area(project, area_grid):
     return best
 
 
+def richness(p):
+    """How much a portal record tells us: filled fields plus listings, amenities and unit types."""
+    units = (p.get("configs") or {}).get("units") or p.get("card_units") or []
+    return (sum(1 for k in ("units", "towers", "acres", "config_text", "developer", "status", "possession") if p.get(k))
+            + len(p.get("rent_listings") or []) + len(p.get("sale_listings") or [])
+            + len(p.get("amenities") or []) + 2 * len(units))
+
+
+def _key(l):
+    return l.get("url") or l.get("id") or (l.get("bhk"), l.get("price"), l.get("sqft"))
+
+
+def merge_records(a, b):
+    """One record from two portal listings of the same society: the richer one is the base,
+    the other fills its gaps, and listings, amenities, unit types and images are combined."""
+    base, other = (a, b) if richness(a) >= richness(b) else (b, a)
+    m = dict(base)
+    for k, v in other.items():
+        if m.get(k) in (None, "", [], {}) and v not in (None, "", [], {}):
+            m[k] = v
+    for k in ("rent_listings", "sale_listings"):
+        seen, out = set(), []
+        for l in (base.get(k) or []) + (other.get(k) or []):
+            if _key(l) not in seen:
+                seen.add(_key(l))
+                out.append(l)
+        m[k] = out
+    for k in ("amenities", "images", "type_codes"):
+        m[k] = list(dict.fromkeys((base.get(k) or []) + (other.get(k) or [])))
+    for k in ("units", "towers", "sale_count", "rent_count"):
+        vals = [x for x in (base.get(k), other.get(k)) if isinstance(x, (int, float))]
+        if vals:
+            m[k] = max(vals)
+    if len(other.get("config_text") or "") > len(base.get("config_text") or ""):
+        m["config_text"] = other["config_text"]
+    ua = (base.get("configs") or {}).get("units") or []
+    ub = (other.get("configs") or {}).get("units") or []
+    if ub and not ua:
+        m["configs"] = other["configs"]
+    elif ua and ub:  # add the other record's unit types for BHKs the base lacks
+        have = {u.get("bhk") for u in ua}
+        m["configs"] = {**base["configs"], "units": ua + [u for u in ub if u.get("bhk") not in have]}
+    m["merged"] = (a.get("merged") or []) + (b.get("merged") or []) + [other["url"]]
+    return m
+
+
 def dedupe(projects):
-    """Merge listings with the same name tokens less than 400 m apart (phases, duplicates)."""
+    """Merge listings with the same name tokens less than 400 m apart (phases, duplicates).
+    Keeps every field the duplicates carry, so a sparse first copy cannot hide a rich second one."""
     kept = []
     for p in projects:
-        for q in kept:
+        for i, q in enumerate(kept):
             if tokens(p["name"]) == tokens(q["name"]) and tokens(p["name"]) and \
                     geo.dist_m((p["lng"], p["lat"]), (q["lng"], q["lat"])) < 400:
-                q.setdefault("merged", []).append(p["url"])
+                kept[i] = merge_records(q, p)
                 break
         else:
             kept.append(p)
@@ -133,7 +180,28 @@ def portal_units(p):
         units.append({"label": f"{u['bhk']} BHK {int(u['sqft']):,} sq ft" if u["bhk"] else f"{int(u['sqft']):,} sq ft",
                       "bhk": u["bhk"], "size_sqft": u["sqft"], "bedrooms": [], "rooms_complete": False,
                       "confidence": "portal", "source": p["url"], "page": None})
+    # the portal's summary ("3, 4 BHK Apartments") often names BHKs its unit list leaves out
+    have = {u["bhk"] for u in units}
+    for b in config_bhks(p.get("config_text")):
+        if b not in have:
+            units.append({"label": f"{b} BHK", "bhk": b, "size_sqft": None, "bedrooms": [], "rooms_complete": False,
+                          "confidence": "portal summary", "source": p["url"], "page": None})
     return units
+
+
+def config_bhks(text):
+    """BHK counts named in a config summary: "2, 3, 4 BHK Apartments" -> [2, 3, 4]. Ranges like "3-5 BHK" expand."""
+    out = []
+    for m in re.finditer(r"((?:\d+(?:\.5)?\s*(?:,|-|&|and|/)\s*)*\d+(?:\.5)?)\s*bhk", (text or "").lower()):
+        nums = [n for n in re.findall(r"\d+(?:\.5)?", m.group(1))]
+        if "-" in m.group(1) and len(nums) == 2 and all("." not in n for n in nums) and int(nums[0]) < int(nums[1]) <= 10:
+            nums = [str(n) for n in range(int(nums[0]), int(nums[1]) + 1)]
+        for n in nums:
+            v = float(n)
+            v = int(v) if v.is_integer() else v
+            if 0 < v <= 10 and v not in out:
+                out.append(v)
+    return out
 
 
 def norm(name):
